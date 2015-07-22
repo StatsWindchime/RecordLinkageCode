@@ -1,0 +1,83 @@
+# Needed Functions 
+
+permute.places<-function(vec1){
+  n=length(vec1)
+  vec1.ordering=sample(1: n , n ,replace=FALSE)
+  vec2=vec1[order(vec1.ordering)];vec2
+}
+
+records.in.block<-function(File1_data, File2_data, num.blocks){
+  
+  # Storage: How many records in each block?  
+  n.RIB = matrix( NA, nrow = 2, ncol = num.blocks )
+  #Storage: Which records in each block? 
+  RIB     = vector( "list", length = 2 )
+  RIB[[1]]     = vector( "list", length = K )
+  RIB[[2]]     = vector( "list", length = K )
+  
+  # Start with File 1 
+  data = File1_data[,"Block"]
+  for(f in 1:2){
+    if( f ==2){
+      data = File2_data[,"Block"]
+    }
+    for(k in 1:K){
+      holder        = which(data==k)
+      RIB[[f]][[k]] = holder
+      n.RIB[f,k]    = length(holder)
+    }
+  }
+  new.list <- list( "RIB" = RIB, "n.RIB" = n.RIB )
+  return(new.list)
+}
+
+make_imputed_holder<-function( data, ToImpute ){
+  # Step 1: Store only one row from each block 
+  ImpHolder = data[!duplicated(data[,"Block"]),]
+  # Step 2: Set all record-specific row entries to 0 
+  ImpHolder[,c(ToImpute)]= ImpHolder[,"BlockRow"] = ImpHolder[,"Seed"] = ImpHolder[,"lambda"] = 0
+  # Step 3: Set the binary imputed indicator to 1 
+  ImpHolder[,"Imputed"] = 1
+  # Step 4: Change the row names
+  rownames(ImpHolder) = 1:nrow(ImpHolder)
+  #Step 4: Transpose ImpHolder so that each record is a column
+  ImpHolder = as.data.frame( t(ImpHolder) )
+  #Step 5: Convert to a list 
+  ImpHolder = as.list(ImpHolder)
+  #Return the matrix 
+  return(ImpHolder)
+}
+
+add_imputed_rows <-function( in_Bl,ImpHolder1, ImpHolder2,RIB,File1_data,File2_data){
+  
+  to.impute = in_Bl[1,]-in_Bl[2,]
+  
+  F1 = which( to.impute < 0 )
+  F2 = which( to.impute > 0 )
+  
+  #Add in rows for each of the blocks that need it in File 1
+  for(k in F1 ){  
+    timeshere = abs(to.impute[k])
+    holder = matrix( rep(ImpHolder1[[k]],timeshere),nrow = timeshere, byrow=T)
+    colnames(holder)=colnames(File1_data)
+    preLength = nrow(File1_data)
+    File1_data = rbind( File1_data, holder)
+    postLength = nrow(File1_data)
+    RIB[[1]][[k]] = c( RIB[[1]][[k]] , (preLength+1):postLength )
+  }
+  
+  #Add in rows for each of the blocks that need it in File 2
+  for(k in F2 ){  
+    timeshere = abs(to.impute[k])
+    holder = matrix( rep(ImpHolder2[[k]],timeshere),nrow = timeshere, byrow=T)
+    colnames(holder)=colnames(File2_data)
+    preLength = nrow(File2_data)
+    File2_data = rbind( File2_data, holder)
+    postLength = nrow(File2_data)
+    RIB[[2]][[k]] = c( RIB[[2]][[k]] , (preLength+1):postLength )
+  }
+  
+  new.list <-list( "File1_data"= File1_data, "File2_data" = File2_data,"RIB"=RIB)
+  
+  return(new.list)
+}
